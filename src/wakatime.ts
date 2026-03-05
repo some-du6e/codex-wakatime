@@ -61,7 +61,7 @@ export function sendHeartbeat(params: HeartbeatParams): void {
     "--category",
     params.category ?? "ai coding",
     "--plugin",
-    `codex/1.0.0 codex-wakatime/${VERSION}`,
+    `${params.client ?? "codex"}/1.0.0 codex-wakatime/${VERSION}`,
   ];
 
   if (params.projectFolder) {

@@ -86,6 +86,7 @@ async function main(): Promise<void> {
   // Extract file paths from assistant message
   const assistantMessage = notification["last-assistant-message"] ?? "";
   const cwd = notification.cwd;
+  const client = notification.client;
   const files = extractFiles(assistantMessage, cwd);
 
   logger.debug(`Extracted ${files.length} files from message`);
@@ -102,6 +103,7 @@ async function main(): Promise<void> {
         category: "ai coding",
         projectFolder: cwd,
         isWrite: file.isWrite,
+        client,
       });
     }
   } else {
@@ -112,6 +114,7 @@ async function main(): Promise<void> {
       entityType: "app",
       category: "ai coding",
       project: path.basename(cwd),
+      client,
     });
   }
 

@@ -7,6 +7,7 @@ export interface CodexNotification {
   "thread-id": string;
   "turn-id": string;
   cwd: string;
+  client?: string;
   "input-messages": string[];
   "last-assistant-message": string | null;
 }
@@ -29,6 +30,7 @@ export interface HeartbeatParams {
   project?: string;
   lineChanges?: number;
   isWrite?: boolean;
+  client?: string;
 }
 
 /**

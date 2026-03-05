@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/angristan/codex-wakatime/compare/v1.1.1...v1.2.0) (2026-03-05)
+
+
+### Features
+
+* forward client field from notification to plugin string ([a6d993b](https://github.com/angristan/codex-wakatime/commit/a6d993b49b4d27b2bbe4e292748d56744bee4056))
+
 ## [1.1.1](https://github.com/angristan/codex-wakatime/compare/v1.1.0...v1.1.1) (2026-01-24)
 
 

@@ -1,142 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import TOML from "@iarna/toml";
 
 const CODEX_CONFIG_PATH = path.join(os.homedir(), ".codex", "config.toml");
-
-/**
- * Simple TOML parser for Codex config
- * Only handles the basic structure we need
- */
-function parseToml(content: string): Record<string, unknown> {
-  const config: Record<string, unknown> = {};
-  const lines = content.split("\n");
-  let currentSection = "";
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    // Section header
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      currentSection = trimmed.slice(1, -1);
-      if (!config[currentSection]) {
-        config[currentSection] = {};
-      }
-      continue;
-    }
-
-    // Key-value pair
-    const equalIndex = trimmed.indexOf("=");
-    if (equalIndex > 0) {
-      const key = trimmed.slice(0, equalIndex).trim();
-      const value = trimmed.slice(equalIndex + 1).trim();
-
-      // Parse the value
-      let parsedValue: unknown;
-
-      // Array
-      if (value.startsWith("[") && value.endsWith("]")) {
-        // Simple array parsing - handle strings in array
-        const arrayContent = value.slice(1, -1).trim();
-        if (arrayContent) {
-          parsedValue = arrayContent.split(",").map((item) => {
-            const trimmedItem = item.trim();
-            if (
-              (trimmedItem.startsWith('"') && trimmedItem.endsWith('"')) ||
-              (trimmedItem.startsWith("'") && trimmedItem.endsWith("'"))
-            ) {
-              return trimmedItem.slice(1, -1);
-            }
-            return trimmedItem;
-          });
-        } else {
-          parsedValue = [];
-        }
-      }
-      // String
-      else if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        parsedValue = value.slice(1, -1);
-      }
-      // Boolean
-      else if (value === "true") {
-        parsedValue = true;
-      } else if (value === "false") {
-        parsedValue = false;
-      }
-      // Number
-      else if (!Number.isNaN(Number(value))) {
-        parsedValue = Number(value);
-      }
-      // Default to string
-      else {
-        parsedValue = value;
-      }
-
-      if (currentSection) {
-        (config[currentSection] as Record<string, unknown>)[key] = parsedValue;
-      } else {
-        config[key] = parsedValue;
-      }
-    }
-  }
-
-  return config;
-}
-
-/**
- * Simple TOML stringifier for Codex config
- */
-function stringifyToml(config: Record<string, unknown>): string {
-  const lines: string[] = [];
-
-  // First, write top-level non-object values
-  for (const [key, value] of Object.entries(config)) {
-    if (typeof value !== "object" || Array.isArray(value)) {
-      lines.push(`${key} = ${formatTomlValue(value)}`);
-    }
-  }
-
-  // Then, write sections
-  for (const [key, value] of Object.entries(config)) {
-    if (typeof value === "object" && !Array.isArray(value) && value !== null) {
-      if (lines.length > 0) {
-        lines.push("");
-      }
-      lines.push(`[${key}]`);
-      for (const [subKey, subValue] of Object.entries(
-        value as Record<string, unknown>,
-      )) {
-        lines.push(`${subKey} = ${formatTomlValue(subValue)}`);
-      }
-    }
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function formatTomlValue(value: unknown): string {
-  if (Array.isArray(value)) {
-    const items = value.map((item) =>
-      typeof item === "string" ? `"${item}"` : String(item),
-    );
-    return `[${items.join(", ")}]`;
-  }
-  if (typeof value === "string") {
-    return `"${value}"`;
-  }
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-  return String(value);
-}
 
 function normalizeNotifyCommand(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
@@ -175,7 +42,7 @@ export function installHook(): void {
   if (fs.existsSync(CODEX_CONFIG_PATH)) {
     try {
       const content = fs.readFileSync(CODEX_CONFIG_PATH, "utf-8");
-      config = parseToml(content);
+      config = TOML.parse(content) as Record<string, unknown>;
       console.log("Found existing Codex config");
     } catch {
       console.warn("Could not parse existing config, creating new one");
@@ -202,7 +69,7 @@ export function installHook(): void {
   config.notify = [pluginCommand];
 
   // Write the config
-  const newContent = stringifyToml(config);
+  const newContent = TOML.stringify(config as TOML.JsonMap);
   fs.writeFileSync(CODEX_CONFIG_PATH, newContent);
 
   console.log(`Updated ${CODEX_CONFIG_PATH}`);
@@ -226,7 +93,7 @@ export function uninstallHook(): void {
 
   try {
     const content = fs.readFileSync(CODEX_CONFIG_PATH, "utf-8");
-    const config = parseToml(content);
+    const config = TOML.parse(content) as Record<string, unknown>;
 
     const pluginCommand = getPluginCommand()[0];
     const existingNotify = normalizeNotifyCommand(config.notify);
@@ -237,7 +104,7 @@ export function uninstallHook(): void {
 
     delete config.notify;
 
-    const newContent = stringifyToml(config);
+    const newContent = TOML.stringify(config as TOML.JsonMap);
     fs.writeFileSync(CODEX_CONFIG_PATH, newContent);
     console.log("codex-wakatime notification hook removed");
   } catch (err) {

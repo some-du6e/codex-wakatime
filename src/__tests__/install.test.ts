@@ -35,7 +35,8 @@ describe("install", () => {
     installHook();
 
     const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;
-    expect(written).toContain('notify = ["codex-wakatime"]');
+    expect(written).toContain("codex-wakatime");
+    expect(written).toMatch(/^notify\s*=/m);
     expect(written).not.toContain("hook-a");
   });
 

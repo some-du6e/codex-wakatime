@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/angristan/codex-wakatime/compare/v1.2.0...v1.3.0) (2026-04-26)
+
+### Features
+
+* use Codex hooks for WakaTime tracking ([ecacda6](https://github.com/angristan/codex-wakatime/commit/ecacda6f9941f2205dc773d949304b243f129e6a))
+
 # [1.2.0](https://github.com/angristan/codex-wakatime/compare/v1.1.1...v1.2.0) (2026-03-05)
 
 

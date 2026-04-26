@@ -27,7 +27,7 @@ const WRITE_PATTERN =
 /**
  * Check if a string looks like a valid file path
  */
-function isValidFilePath(p: string): boolean {
+function isValidPathLike(p: string): boolean {
   // Must not be empty
   if (!p || p.length === 0) return false;
 
@@ -37,6 +37,12 @@ function isValidFilePath(p: string): boolean {
 
   // Must not contain invalid characters
   if (/[<>|?*]/.test(p)) return false;
+
+  return true;
+}
+
+function isValidFilePath(p: string): boolean {
+  if (!isValidPathLike(p)) return false;
 
   // Must have a file extension
   const ext = path.extname(p).slice(1).toLowerCase();
@@ -53,7 +59,7 @@ function isValidFilePath(p: string): boolean {
 /**
  * Normalize a file path (resolve relative paths, clean up)
  */
-function normalizePath(filePath: string, cwd: string): string {
+export function normalizePath(filePath: string, cwd: string): string {
   // Remove leading/trailing whitespace
   const cleaned = filePath.trim();
 
@@ -64,6 +70,33 @@ function normalizePath(filePath: string, cwd: string): string {
 
   // Resolve relative to cwd
   return path.normalize(path.join(cwd, cleaned));
+}
+
+/**
+ * Extract written files from an apply_patch patch body.
+ */
+export function extractApplyPatchFiles(
+  patch: string,
+  cwd: string,
+): ExtractedFile[] {
+  if (!patch || patch.length === 0) {
+    return [];
+  }
+
+  const fileMap = new Map<string, boolean>();
+  const pattern = /^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm;
+
+  for (const match of patch.matchAll(pattern)) {
+    const filePath = match[1]?.trim();
+    if (filePath && isValidPathLike(filePath)) {
+      fileMap.set(normalizePath(filePath, cwd), true);
+    }
+  }
+
+  return Array.from(fileMap.entries()).map(([filePath, isWrite]) => ({
+    path: filePath,
+    isWrite,
+  }));
 }
 
 /**

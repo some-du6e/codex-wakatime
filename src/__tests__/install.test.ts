@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import * as path from "node:path";
+import TOML from "@iarna/toml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs");
@@ -10,8 +10,23 @@ vi.mock("node:os", () => ({
 
 const { installHook, uninstallHook } = await import("../install.js");
 
-const CODEX_DIR = path.join("/home/user", ".codex");
-const CONFIG_PATH = path.join(CODEX_DIR, "config.toml");
+function writtenConfig(): Record<string, unknown> {
+  const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;
+  return TOML.parse(written) as Record<string, unknown>;
+}
+
+function hookCommands(
+  config: Record<string, unknown>,
+  eventName: string,
+): string[] {
+  const hooks = config.hooks as Record<string, unknown>;
+  const groups = hooks[eventName] as Array<Record<string, unknown>>;
+  return groups.flatMap((group) =>
+    (group.hooks as Array<Record<string, unknown>>).map(
+      (hook) => hook.command as string,
+    ),
+  );
+}
 
 describe("install", () => {
   beforeEach(() => {
@@ -26,37 +41,117 @@ describe("install", () => {
     vi.restoreAllMocks();
   });
 
-  it("replaces existing notify command with codex-wakatime", () => {
+  it("installs Stop and PostToolUse hooks while preserving unrelated notify", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      'notify = ["hook-a", "hook-b"]\n',
-    );
+    vi.mocked(fs.readFileSync).mockReturnValue('notify = ["hook-a"]\n');
 
     installHook();
 
-    const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;
-    expect(written).toContain("codex-wakatime");
-    expect(written).toMatch(/^notify\s*=/m);
-    expect(written).not.toContain("hook-a");
+    const config = writtenConfig();
+    expect(config.notify).toEqual(["hook-a"]);
+    expect(hookCommands(config, "Stop")).toEqual(["codex-wakatime --hook"]);
+    expect(hookCommands(config, "PostToolUse")).toEqual([
+      "codex-wakatime --hook",
+    ]);
+    const postToolUseGroups = (config.hooks as Record<string, unknown>)
+      .PostToolUse as Array<Record<string, unknown>>;
+    expect(postToolUseGroups[0]?.matcher).toBe("apply_patch");
   });
 
   it("does not overwrite when codex-wakatime is already configured", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue('notify = ["codex-wakatime"]\n');
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+
+[[hooks.PostToolUse]]
+matcher = "apply_patch"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+`);
 
     installHook();
 
     expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
-  it("removes notify when codex-wakatime is configured", () => {
+  it("migrates owned legacy notify to hooks", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue('notify = ["codex-wakatime"]\n');
 
+    installHook();
+
+    const config = writtenConfig();
+    expect(config.notify).toBeUndefined();
+    expect(hookCommands(config, "Stop")).toEqual(["codex-wakatime --hook"]);
+    expect(hookCommands(config, "PostToolUse")).toEqual([
+      "codex-wakatime --hook",
+    ]);
+  });
+
+  it("removes codex-wakatime hooks and owned legacy notify", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+notify = ["codex-wakatime"]
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+
+[[hooks.PostToolUse]]
+matcher = "apply_patch"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+`);
+
     uninstallHook();
 
-    const written = vi.mocked(fs.writeFileSync).mock.calls[0]?.[1] as string;
-    expect(written).not.toContain("notify");
+    const config = writtenConfig();
+    expect(config.notify).toBeUndefined();
+    expect(config.hooks).toBeUndefined();
+  });
+
+  it("preserves unrelated hooks and notify during uninstall", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+notify = ["hook-a"]
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "other-stop"
+timeout = 10
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+
+[[hooks.PostToolUse]]
+matcher = "apply_patch"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+`);
+
+    uninstallHook();
+
+    const config = writtenConfig();
+    expect(config.notify).toEqual(["hook-a"]);
+    expect(hookCommands(config, "Stop")).toEqual(["other-stop"]);
+    expect(
+      (config.hooks as Record<string, unknown>).PostToolUse,
+    ).toBeUndefined();
   });
 
   it("does not write when codex-wakatime is not configured", () => {

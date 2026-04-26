@@ -1,34 +1,34 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { extractFiles } from "./extractor.js";
 import { installHook, uninstallHook } from "./install.js";
 import { LogLevel, logger } from "./logger.js";
 import { isDebugEnabled } from "./options.js";
+import { parseHookInput, parseLegacyNotification } from "./parser.js";
 import { shouldSendHeartbeat, updateLastHeartbeat } from "./state.js";
-import type { CodexNotification } from "./types.js";
+import type { ExtractedFile, UsageEvent } from "./types.js";
 import { ensureCliInstalled, sendHeartbeat } from "./wakatime.js";
 
 /**
- * Parse the notification JSON from CLI argument
- * Codex passes the notification as a JSON string argument
+ * Parse the usage event from either legacy notify argv or Codex hook stdin.
  */
-function parseNotification(): CodexNotification | undefined {
-  const jsonArg = process.argv[2];
-  if (!jsonArg) {
-    return undefined;
-  }
-
-  // Skip if it looks like a flag
-  if (jsonArg.startsWith("-")) {
-    return undefined;
-  }
-
+function parseUsageEvent(args: string[]): UsageEvent | undefined {
   try {
-    const notification = JSON.parse(jsonArg) as CodexNotification;
-    return notification;
+    if (args.includes("--hook")) {
+      return parseHookInput(fs.readFileSync(0, "utf-8"));
+    }
+    return parseLegacyNotification(args[0]);
   } catch (err) {
     logger.warnException(err);
     return undefined;
   }
+}
+
+function filesForEvent(event: UsageEvent): ExtractedFile[] {
+  if (event.files) {
+    return event.files;
+  }
+  return extractFiles(event.assistantMessage ?? "", event.cwd);
 }
 
 /**
@@ -55,18 +55,17 @@ async function main(): Promise<void> {
 
   logger.debug("codex-wakatime started");
 
-  // Parse notification from CLI argument
-  const notification = parseNotification();
-  if (!notification) {
-    logger.debug("No valid notification received");
+  const event = parseUsageEvent(args);
+  if (!event) {
+    logger.debug("No valid usage event received");
     return;
   }
 
-  logger.debug(`Received notification: ${notification.type}`);
-
-  // Only handle agent-turn-complete events
-  if (notification.type !== "agent-turn-complete") {
-    logger.debug(`Ignoring notification type: ${notification.type}`);
+  const files = filesForEvent(event);
+  logger.debug(`Received usage event: ${event.kind}`);
+  logger.debug(`Extracted ${files.length} files from event`);
+  if (event.kind === "tool" && files.length === 0) {
+    logger.debug("Skipping tool event without file heartbeats");
     return;
   }
 
@@ -83,14 +82,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Extract file paths from assistant message
-  const assistantMessage = notification["last-assistant-message"] ?? "";
-  const cwd = notification.cwd;
-  const client = notification.client;
-  const files = extractFiles(assistantMessage, cwd);
-
-  logger.debug(`Extracted ${files.length} files from message`);
-
   if (files.length > 0) {
     // Send per-file heartbeats
     for (const file of files) {
@@ -101,20 +92,20 @@ async function main(): Promise<void> {
         entity: file.path,
         entityType: "file",
         category: "ai coding",
-        projectFolder: cwd,
+        projectFolder: event.cwd,
         isWrite: file.isWrite,
-        client,
+        client: event.client,
       });
     }
   } else {
     // Fallback: project-level heartbeat
-    logger.debug(`Sending project heartbeat for: ${cwd}`);
+    logger.debug(`Sending project heartbeat for: ${event.cwd}`);
     sendHeartbeat({
-      entity: cwd,
+      entity: event.cwd,
       entityType: "app",
       category: "ai coding",
-      project: path.basename(cwd),
-      client,
+      project: path.basename(event.cwd),
+      client: event.client,
     });
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractFiles } from "../extractor.js";
+import { extractApplyPatchFiles, extractFiles } from "../extractor.js";
 
 describe("extractor", () => {
   describe("extractFiles", () => {
@@ -171,6 +171,88 @@ The changes have been applied successfully.
       it("returns empty array for null-ish message", () => {
         expect(extractFiles(null as unknown as string, cwd)).toEqual([]);
       });
+    });
+  });
+
+  describe("extractApplyPatchFiles", () => {
+    const cwd = "/project";
+
+    it("detects added files as writes", () => {
+      const files = extractApplyPatchFiles(
+        "*** Begin Patch\n*** Add File: src/new.ts\n+export {}\n*** End Patch\n",
+        cwd,
+      );
+
+      expect(files).toEqual([{ path: "/project/src/new.ts", isWrite: true }]);
+    });
+
+    it("detects updated files as writes", () => {
+      const files = extractApplyPatchFiles(
+        "*** Begin Patch\n*** Update File: src/existing.ts\n@@\n-old\n+new\n*** End Patch\n",
+        cwd,
+      );
+
+      expect(files).toEqual([
+        { path: "/project/src/existing.ts", isWrite: true },
+      ]);
+    });
+
+    it("detects deleted files as writes", () => {
+      const files = extractApplyPatchFiles(
+        "*** Begin Patch\n*** Delete File: src/old.ts\n*** End Patch\n",
+        cwd,
+      );
+
+      expect(files).toEqual([{ path: "/project/src/old.ts", isWrite: true }]);
+    });
+
+    it("deduplicates multiple patch entries", () => {
+      const files = extractApplyPatchFiles(
+        [
+          "*** Begin Patch",
+          "*** Update File: src/a.ts",
+          "@@",
+          "-old",
+          "+new",
+          "*** Update File: src/b.ts",
+          "@@",
+          "-old",
+          "+new",
+          "*** Update File: src/a.ts",
+          "@@",
+          "-old",
+          "+new",
+          "*** End Patch",
+        ].join("\n"),
+        cwd,
+      );
+
+      expect(files).toEqual([
+        { path: "/project/src/a.ts", isWrite: true },
+        { path: "/project/src/b.ts", isWrite: true },
+      ]);
+    });
+
+    it("keeps absolute paths absolute", () => {
+      const files = extractApplyPatchFiles(
+        "*** Begin Patch\n*** Update File: /tmp/outside.ts\n@@\n-old\n+new\n*** End Patch\n",
+        cwd,
+      );
+
+      expect(files).toEqual([{ path: "/tmp/outside.ts", isWrite: true }]);
+    });
+
+    it("returns empty for malformed patches", () => {
+      expect(extractApplyPatchFiles("not a patch", cwd)).toEqual([]);
+    });
+
+    it("returns empty for patches without file headers", () => {
+      expect(
+        extractApplyPatchFiles(
+          "*** Begin Patch\n@@\n-old\n+new\n*** End Patch\n",
+          cwd,
+        ),
+      ).toEqual([]);
     });
   });
 });

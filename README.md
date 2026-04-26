@@ -34,13 +34,13 @@ WakaTime integration for [OpenAI Codex CLI](https://github.com/openai/codex). Tr
 # Install the package
 npm install -g codex-wakatime
 
-# Configure the notification hook
+# Configure Codex hooks
 codex-wakatime --install
 ```
 
-This adds `notify = ["codex-wakatime"]` to your `~/.codex/config.toml`.
-If you already have a `notify` command configured, codex-wakatime replaces it
-because Codex supports a single notify command.
+This adds `Stop` and `PostToolUse` hooks to your `~/.codex/config.toml`.
+If an older `notify = ["codex-wakatime"]` entry exists, it is migrated to hooks.
+Other `notify` commands are preserved.
 
 ## How It Works
 
@@ -51,18 +51,19 @@ because Codex supports a single notify command.
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              agent-turn-complete event                       │
-│   Codex sends notification with:                             │
-│   - thread-id, turn-id                                       │
+│              Stop / PostToolUse hooks                        │
+│   Codex sends hook payloads with:                             │
+│   - session-id, turn-id                                      │
 │   - cwd (working directory)                                  │
-│   - last-assistant-message                                   │
+│   - last-assistant-message on Stop                           │
+│   - apply_patch input on PostToolUse                         │
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   codex-wakatime                             │
-│   1. Parse notification JSON from CLI argument               │
-│   2. Extract file paths from assistant message               │
+│   1. Parse hook JSON from stdin                              │
+│   2. Extract file paths from apply_patch or assistant text   │
 │   3. Check 60-second rate limit                              │
 │   4. Send heartbeat(s) to WakaTime                           │
 └─────────────────────────┬───────────────────────────────────┘
@@ -74,15 +75,21 @@ because Codex supports a single notify command.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Notification Hook
+### Codex Hooks
 
 | Event | Purpose |
 |-------|---------|
-| `agent-turn-complete` | Triggered after each Codex turn completes |
+| `Stop` | Sends a turn-level heartbeat after each Codex turn completes |
+| `PostToolUse` (`apply_patch`) | Sends file-level write heartbeats for patch edits |
+
+Legacy `agent-turn-complete` notify payloads are still supported for existing
+manual setups.
 
 ### File Detection Patterns
 
-The plugin extracts file paths from the assistant's response using these patterns:
+The plugin extracts edited files directly from `apply_patch` hook payloads. For
+turn-level fallback heartbeats, it extracts file paths from the assistant's
+response using these patterns:
 
 - **Code block headers**: ` ```typescript:src/index.ts `
 - **Backtick paths**: `` `src/file.ts` ``
@@ -96,7 +103,18 @@ If no files are detected, a project-level heartbeat is sent using the working di
 The plugin auto-configures `~/.codex/config.toml` on installation:
 
 ```toml
-notify = ["codex-wakatime"]
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
+
+[[hooks.PostToolUse]]
+matcher = "apply_patch"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "codex-wakatime --hook"
+timeout = 60
 ```
 
 ### Debug Mode
@@ -177,8 +195,9 @@ npm uninstall -g codex-wakatime
 
 | Command | Description |
 |---------|-------------|
-| `codex-wakatime --install` | Add notification hook to Codex config |
-| `codex-wakatime --uninstall` | Remove notification hook from Codex config |
+| `codex-wakatime --install` | Add Codex hooks to Codex config |
+| `codex-wakatime --uninstall` | Remove Codex hooks from Codex config |
+| `codex-wakatime --hook` | Process a Codex hook payload from stdin |
 | `codex-wakatime '{"type":"agent-turn-complete",...}'` | Process a notification (called by Codex) |
 
 ## Troubleshooting
@@ -186,7 +205,7 @@ npm uninstall -g codex-wakatime
 ### No heartbeats being sent
 
 1. Check that your API key is configured in `~/.wakatime.cfg`
-2. Verify the notify hook is set in `~/.codex/config.toml`
+2. Verify the Codex hooks are set in `~/.codex/config.toml`
 3. Enable debug mode and check `~/.wakatime/codex.log`
 
 ### Rate limiting

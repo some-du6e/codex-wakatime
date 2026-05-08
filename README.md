@@ -38,7 +38,8 @@ npm install -g codex-wakatime
 codex-wakatime --install
 ```
 
-This adds `Stop` and `PostToolUse` hooks to your `~/.codex/config.toml`.
+This enables Codex lifecycle hooks and adds `Stop` and `PostToolUse` hooks to
+your `~/.codex/config.toml`.
 If an older `notify = ["codex-wakatime"]` entry exists, it is migrated to hooks.
 Other `notify` commands are preserved.
 
@@ -103,6 +104,9 @@ If no files are detected, a project-level heartbeat is sent using the working di
 The plugin auto-configures `~/.codex/config.toml` on installation:
 
 ```toml
+[features]
+codex_hooks = true
+
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"

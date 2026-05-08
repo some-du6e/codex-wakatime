@@ -49,6 +49,7 @@ describe("install", () => {
 
     const config = writtenConfig();
     expect(config.notify).toEqual(["hook-a"]);
+    expect((config.features as Record<string, unknown>).codex_hooks).toBe(true);
     expect(hookCommands(config, "Stop")).toEqual(["codex-wakatime --hook"]);
     expect(hookCommands(config, "PostToolUse")).toEqual([
       "codex-wakatime --hook",
@@ -61,6 +62,9 @@ describe("install", () => {
   it("does not overwrite when codex-wakatime is already configured", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(`
+[features]
+codex_hooks = true
+
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
@@ -78,6 +82,26 @@ timeout = 60
     installHook();
 
     expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("enables Codex hooks while preserving existing feature flags", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+[features]
+unified_exec = true
+`);
+
+    installHook();
+
+    const config = writtenConfig();
+    expect(config.features).toEqual({
+      codex_hooks: true,
+      unified_exec: true,
+    });
+    expect(hookCommands(config, "Stop")).toEqual(["codex-wakatime --hook"]);
+    expect(hookCommands(config, "PostToolUse")).toEqual([
+      "codex-wakatime --hook",
+    ]);
   });
 
   it("migrates owned legacy notify to hooks", () => {

@@ -7,6 +7,7 @@ const CODEX_CONFIG_PATH = path.join(os.homedir(), ".codex", "config.toml");
 const LEGACY_NOTIFY_COMMAND = "codex-wakatime";
 const HOOK_COMMAND = "codex-wakatime --hook";
 const HOOK_TIMEOUT_SECONDS = 60;
+const CODEX_HOOKS_FEATURE = "codex_hooks";
 const STOP_EVENT = "Stop";
 const POST_TOOL_USE_EVENT = "PostToolUse";
 
@@ -51,6 +52,27 @@ function hooksConfig(config: TomlRecord): TomlRecord {
   const hooks: TomlRecord = {};
   config.hooks = hooks;
   return hooks;
+}
+
+function featuresConfig(config: TomlRecord): TomlRecord {
+  const existing = config.features;
+  if (isRecord(existing)) {
+    return existing;
+  }
+
+  const features: TomlRecord = {};
+  config.features = features;
+  return features;
+}
+
+function ensureCodexHooksFeature(config: TomlRecord): boolean {
+  const features = featuresConfig(config);
+  if (features[CODEX_HOOKS_FEATURE] === true) {
+    return false;
+  }
+
+  features[CODEX_HOOKS_FEATURE] = true;
+  return true;
 }
 
 function matcherMatches(
@@ -205,6 +227,7 @@ export function installHook(): void {
   }
 
   let changed = false;
+  changed = ensureCodexHooksFeature(config) || changed;
   for (const spec of HOOK_SPECS) {
     changed = ensureHook(config, spec) || changed;
   }

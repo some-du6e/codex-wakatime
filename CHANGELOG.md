@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/angristan/codex-wakatime/compare/v1.3.0...v1.3.1) (2026-05-08)
+
+### Bug Fixes
+
+* enable Codex hooks feature on install ([7a91491](https://github.com/angristan/codex-wakatime/commit/7a9149145446b1289c92bcd98efd28d69530c2e1))
+
 ## [1.3.0](https://github.com/angristan/codex-wakatime/compare/v1.2.0...v1.3.0) (2026-04-26)
 
 ### Features

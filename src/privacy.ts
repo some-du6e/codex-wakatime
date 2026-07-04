@@ -22,7 +22,12 @@ function parseConfig(): PrivacyConfig {
     return config;
   }
 
-  const content = fs.readFileSync(WAKATIME_CONFIG, "utf-8");
+  let content: string;
+  try {
+    content = fs.readFileSync(WAKATIME_CONFIG, "utf-8");
+  } catch {
+    return config;
+  }
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#") || line.startsWith(";")) continue;
@@ -47,15 +52,33 @@ function parseConfig(): PrivacyConfig {
   return config;
 }
 
+function pathModuleFor(value: string): typeof path.posix | typeof path.win32 {
+  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\")
+    ? path.win32
+    : path.posix;
+}
+
+function resolvePath(value: string): string {
+  return pathModuleFor(value).resolve(value);
+}
+
 function isUnderRoot(value: string | undefined, root: string): boolean {
   if (!value) return false;
-  const normalized = path.resolve(value);
-  return normalized === root || normalized.startsWith(`${root}/`);
+  const platformPath = pathModuleFor(root);
+  const normalized = platformPath.resolve(value);
+  const relative = platformPath.relative(root, normalized);
+  return (
+    relative === "" ||
+    (!!relative &&
+      !relative.startsWith("..") &&
+      !platformPath.isAbsolute(relative))
+  );
 }
 
 function vagueFilePath(entity: string, entityRoot: string): string {
-  const ext = path.extname(entity);
-  return path.join(entityRoot, `vague_file${ext}`);
+  const platformPath = pathModuleFor(entityRoot);
+  const ext = pathModuleFor(entity).extname(entity);
+  return platformPath.join(entityRoot, `vague_file${ext}`);
 }
 
 export function anonymizeHeartbeat(params: HeartbeatParams): HeartbeatParams {
@@ -64,8 +87,8 @@ export function anonymizeHeartbeat(params: HeartbeatParams): HeartbeatParams {
     return params;
   }
 
-  const root = path.resolve(config.root);
-  const entityRoot = config.entityRoot ?? root;
+  const root = resolvePath(config.root);
+  const entityRoot = resolvePath(config.entityRoot ?? root);
   const isCodexHeartbeat =
     isUnderRoot(params.entity, root) || isUnderRoot(params.projectFolder, root);
 

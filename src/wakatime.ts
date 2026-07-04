@@ -1,4 +1,8 @@
-import { type ExecFileOptions, execFile } from "node:child_process";
+import {
+  type ExecFileOptions,
+  execFile,
+  execFileSync,
+} from "node:child_process";
 import * as os from "node:os";
 import pkg from "../package.json" with { type: "json" };
 import { dependencies } from "./dependencies.js";
@@ -7,6 +11,7 @@ import { anonymizeHeartbeat } from "./privacy.js";
 import type { HeartbeatParams } from "./types.js";
 
 const VERSION = pkg.version;
+const cliFeatureCache = new Map<string, boolean>();
 
 export function isWindows(): boolean {
   return os.platform() === "win32";
@@ -46,6 +51,26 @@ export async function ensureCliInstalled(): Promise<boolean> {
   }
 }
 
+export function supportsSyncAiDisabled(cliLocation: string): boolean {
+  const cached = cliFeatureCache.get(cliLocation);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  try {
+    const output = execFileSync(cliLocation, ["--help"], {
+      ...buildExecOptions(),
+      encoding: "utf-8",
+    });
+    const supported = output.includes("--sync-ai-disabled");
+    cliFeatureCache.set(cliLocation, supported);
+    return supported;
+  } catch {
+    cliFeatureCache.set(cliLocation, false);
+    return false;
+  }
+}
+
 export function sendHeartbeat(params: HeartbeatParams): void {
   params = anonymizeHeartbeat(params);
   const cliLocation = dependencies.getCliLocation();
@@ -62,10 +87,13 @@ export function sendHeartbeat(params: HeartbeatParams): void {
     params.entityType,
     "--category",
     params.category ?? "ai coding",
-    "--sync-ai-disabled",
     "--plugin",
     `${params.client ?? "codex"}/1.0.0 codex-wakatime/${VERSION}`,
   ];
+
+  if (supportsSyncAiDisabled(cliLocation)) {
+    args.push("--sync-ai-disabled");
+  }
 
   if (params.projectFolder) {
     args.push("--project-folder", params.projectFolder);

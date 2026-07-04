@@ -62,6 +62,7 @@ export function sendHeartbeat(params: HeartbeatParams): void {
     params.entityType,
     "--category",
     params.category ?? "ai coding",
+    "--sync-ai-disabled",
     "--plugin",
     `${params.client ?? "codex"}/1.0.0 codex-wakatime/${VERSION}`,
   ];

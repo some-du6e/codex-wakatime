@@ -3,6 +3,7 @@ import * as os from "node:os";
 import pkg from "../package.json" with { type: "json" };
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
+import { anonymizeHeartbeat } from "./privacy.js";
 import type { HeartbeatParams } from "./types.js";
 
 const VERSION = pkg.version;
@@ -46,6 +47,7 @@ export async function ensureCliInstalled(): Promise<boolean> {
 }
 
 export function sendHeartbeat(params: HeartbeatParams): void {
+  params = anonymizeHeartbeat(params);
   const cliLocation = dependencies.getCliLocation();
 
   if (!dependencies.isCliInstalled()) {

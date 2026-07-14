@@ -3,7 +3,9 @@ import {
   execFile,
   execFileSync,
 } from "node:child_process";
+import * as fs from "node:fs";
 import * as os from "node:os";
+import * as path from "node:path";
 import pkg from "../package.json" with { type: "json" };
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
@@ -71,8 +73,34 @@ export function supportsSyncAiDisabled(cliLocation: string): boolean {
   }
 }
 
+export function ensureAnonymizedFileEntity(
+  original: HeartbeatParams,
+  anonymized: HeartbeatParams,
+): void {
+  if (
+    anonymized.entityType !== "file" ||
+    anonymized.entity === original.entity ||
+    fs.existsSync(anonymized.entity)
+  ) {
+    return;
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(anonymized.entity), { recursive: true });
+    fs.writeFileSync(anonymized.entity, "Codex activity placeholder.\n", {
+      flag: "wx",
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      logger.warn(`Could not create privacy placeholder: ${anonymized.entity}`);
+    }
+  }
+}
+
 export function sendHeartbeat(params: HeartbeatParams): void {
+  const originalParams = params;
   params = anonymizeHeartbeat(params);
+  ensureAnonymizedFileEntity(originalParams, params);
   const cliLocation = dependencies.getCliLocation();
 
   if (!dependencies.isCliInstalled()) {

@@ -107,7 +107,8 @@ export function anonymizeHeartbeat(params: HeartbeatParams): HeartbeatParams {
 
   return {
     ...params,
-    entity: entityRoot,
+    entity: vagueFilePath("vague_file.txt", entityRoot),
+    entityType: "file",
     projectFolder: root,
     project: config.project,
   };

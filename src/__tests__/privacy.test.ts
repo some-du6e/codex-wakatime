@@ -120,7 +120,7 @@ describe("privacy", () => {
     expect(result).toBe(heartbeat);
   });
 
-  it("anonymizes app heartbeats under the configured root", () => {
+  it("anonymizes app heartbeats as synthetic file heartbeats", () => {
     process.env.CODEX_WAKATIME_PRIVACY_ROOT = "/tmp/example-codex-root";
     process.env.CODEX_WAKATIME_PRIVACY_PROJECT = "vague_project";
 
@@ -135,7 +135,8 @@ describe("privacy", () => {
 
     expect(result).toEqual({
       ...heartbeat,
-      entity: "/tmp/example-codex-root",
+      entity: "/tmp/example-codex-root/vague_file.txt",
+      entityType: "file",
       projectFolder: "/tmp/example-codex-root",
       project: "vague_project",
     });

@@ -119,10 +119,6 @@ export function sendHeartbeat(params: HeartbeatParams): void {
     `${params.client ?? "codex"}/1.0.0 codex-wakatime/${VERSION}`,
   ];
 
-  if (supportsSyncAiDisabled(cliLocation)) {
-    args.push("--sync-ai-disabled");
-  }
-
   if (params.projectFolder) {
     args.push("--project-folder", params.projectFolder);
   }

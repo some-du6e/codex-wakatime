@@ -68,6 +68,10 @@ export function parseHookInput(input: string): UsageEvent | undefined {
     return undefined;
   }
 
+  if (payload.hook_event_name === "UserPromptSubmit") {
+    return { kind: "turn", cwd };
+  }
+
   if (payload.hook_event_name === "Stop") {
     return {
       kind: "turn",
@@ -95,6 +99,11 @@ export function parseHookInput(input: string): UsageEvent | undefined {
       cwd,
       files,
     };
+  }
+
+  // Any other tool call still counts as activity in this project.
+  if (payload.hook_event_name === "PostToolUse") {
+    return { kind: "tool", cwd, files: [] };
   }
 
   return undefined;

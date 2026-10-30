@@ -119,7 +119,8 @@ async function main(): Promise<void> {
       entity: event.cwd,
       entityType: "app",
       category: "ai coding",
-      project: path.basename(event.cwd),
+      // Let wakatime-cli detect the project, so git worktrees map to their repo
+      projectFolder: event.cwd,
       client: event.client,
     });
   }

@@ -116,7 +116,8 @@ async function main(): Promise<void> {
     // Fallback: project-level heartbeat
     logger.debug(`Sending project heartbeat for: ${event.cwd}`);
     sendHeartbeat({
-      entity: event.cwd,
+      // Not the cwd: Hackatime would list the folder (e.g. a worktree path) as a file
+      entity: "Codex",
       entityType: "app",
       category: "ai coding",
       // Let wakatime-cli detect the project, so git worktrees map to their repo

@@ -44,5 +44,15 @@ export function shouldSendHeartbeat(force: boolean = false): boolean {
 }
 
 export function updateLastHeartbeat(): void {
-  writeState({ lastHeartbeatAt: timestamp() });
+  writeState({ ...readState(), lastHeartbeatAt: timestamp() });
+}
+
+export function getLastFile(cwd: string): string | undefined {
+  const file = readState().lastFiles?.[cwd];
+  return file && fs.existsSync(file) ? file : undefined;
+}
+
+export function setLastFile(cwd: string, file: string): void {
+  const state = readState();
+  writeState({ ...state, lastFiles: { ...state.lastFiles, [cwd]: file } });
 }

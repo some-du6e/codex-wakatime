@@ -80,7 +80,7 @@ describe("parser", () => {
       });
     });
 
-    it("ignores unsupported PostToolUse tools", () => {
+    it("treats other PostToolUse tools as file-less activity", () => {
       const event = parseHookInput(
         JSON.stringify({
           hook_event_name: "PostToolUse",
@@ -90,7 +90,18 @@ describe("parser", () => {
         }),
       );
 
-      expect(event).toBeUndefined();
+      expect(event).toEqual({ kind: "tool", cwd: "/project", files: [] });
+    });
+
+    it("treats UserPromptSubmit as turn activity", () => {
+      const event = parseHookInput(
+        JSON.stringify({
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/project",
+        }),
+      );
+
+      expect(event).toEqual({ kind: "turn", cwd: "/project" });
     });
 
     it("ignores apply_patch PostToolUse payloads without parseable files", () => {

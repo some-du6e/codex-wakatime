@@ -5,7 +5,12 @@ import { installHook, uninstallHook } from "./install.js";
 import { LogLevel, logger } from "./logger.js";
 import { isDebugEnabled } from "./options.js";
 import { parseHookInput, parseLegacyNotification } from "./parser.js";
-import { shouldSendHeartbeat, updateLastHeartbeat } from "./state.js";
+import {
+  getLastFile,
+  setLastFile,
+  shouldSendHeartbeat,
+  updateLastHeartbeat,
+} from "./state.js";
 import type { ExtractedFile, UsageEvent } from "./types.js";
 import { ensureCliInstalled, sendHeartbeat } from "./wakatime.js";
 
@@ -64,13 +69,12 @@ async function main(): Promise<void> {
   const files = filesForEvent(event);
   logger.debug(`Received usage event: ${event.kind}`);
   logger.debug(`Extracted ${files.length} files from event`);
-  if (event.kind === "tool" && files.length === 0) {
-    logger.debug("Skipping tool event without file heartbeats");
-    return;
+  for (const file of files) {
+    setLastFile(event.cwd, file.path);
   }
 
-  // Check rate limiting
-  if (!shouldSendHeartbeat()) {
+  // Check rate limiting; file edits always go through
+  if (files.length === 0 && !shouldSendHeartbeat()) {
     logger.debug("Skipping heartbeat due to rate limiting");
     return;
   }
@@ -97,14 +101,27 @@ async function main(): Promise<void> {
         client: event.client,
       });
     }
+  } else if (getLastFile(event.cwd)) {
+    // Fallback: keep crediting the last file touched in this project
+    const lastFile = getLastFile(event.cwd) as string;
+    logger.debug(`Sending heartbeat for last file: ${lastFile}`);
+    sendHeartbeat({
+      entity: lastFile,
+      entityType: "file",
+      category: "ai coding",
+      projectFolder: event.cwd,
+      client: event.client,
+    });
   } else {
     // Fallback: project-level heartbeat
     logger.debug(`Sending project heartbeat for: ${event.cwd}`);
     sendHeartbeat({
-      entity: event.cwd,
+      // Not the cwd: Hackatime would list the folder (e.g. a worktree path) as a file
+      entity: "Codex",
       entityType: "app",
       category: "ai coding",
-      project: path.basename(event.cwd),
+      // Let wakatime-cli detect the project, so git worktrees map to their repo
+      projectFolder: event.cwd,
       client: event.client,
     });
   }

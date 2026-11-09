@@ -62,6 +62,8 @@ export interface UsageEvent {
  */
 export interface State {
   lastHeartbeatAt?: number;
+  /** Last file touched per working directory, reused for file-less events */
+  lastFiles?: Record<string, string>;
 }
 
 /**
